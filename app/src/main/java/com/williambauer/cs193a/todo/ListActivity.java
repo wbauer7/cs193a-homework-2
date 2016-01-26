@@ -12,14 +12,22 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintStream;
+import java.lang.reflect.Array;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
 
 public class ListActivity extends AppCompatActivity {
@@ -48,35 +56,38 @@ public class ListActivity extends AppCompatActivity {
                 }
         );
 
-        // ******
-        try {
-            URL url = new URL(LOAD_URL);
-            new ReadListFromServerTask().execute(url);
-        } catch (IOException ioe) {
-            Log.e("SaveListToServerCall", ioe.toString());
-        }
 
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        initList();
+        loadList();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
         saveListToFile();
+        saveListToServer();
     }
 
-    // initializes the list (internally and in GUI)
-    private void initList() {
 
+    private void loadList() {
         if (listArr == null) {
             listArr = new ArrayList<>();
-            readListFromFile();
+
+            try {
+                URL url = new URL(LOAD_URL);
+                new ReadListFromServerTask().execute(url);
+            } catch (IOException ioe) {
+                Log.e("ReadListFromServerCall", ioe.toString());
+            }
         }
+    }
+
+
+    private void initListAdapter() {
 
         listAdapter = new ArrayAdapter<>(
                 this,
@@ -114,6 +125,15 @@ public class ListActivity extends AppCompatActivity {
 
         } catch (IOException ioe) {
             Log.e("saveListToFile", ioe.toString());
+        }
+    }
+
+    private void saveListToServer() {
+        try {
+                URL url = new URL(SAVE_URL);
+                new SaveListToServerTask().execute(url);
+        } catch (IOException ioe) {
+            Log.e("SaveListToServerCall", ioe.toString());
         }
     }
 
@@ -176,7 +196,7 @@ public class ListActivity extends AppCompatActivity {
     public void onRestoreInstanceState(Bundle inState) {
         super.onRestoreInstanceState(inState);
         listArr = inState.getStringArrayList("listArr");
-        initList();
+        loadList();
     }
 
 
@@ -190,6 +210,34 @@ public class ListActivity extends AppCompatActivity {
             for (URL url : urls) {
                 try {
                     HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+
+                    urlConnection.setDoOutput(true);
+//                    urlConnection.setChunkedStreamingMode(0);
+                    urlConnection.setRequestMethod("POST");
+                    urlConnection.setRequestProperty("Content-Type",
+                            "application/x-www-form-urlencoded");
+
+                    // convert list to text format
+                    String listArrStr = listArr.toString().substring(1, listArr.toString().length() - 1);
+                    listArrStr = listArrStr.replaceAll(", ", "\n");
+                    listArrStr = listArrStr.replaceAll(",", "\n");
+
+                    Map<String, String> params = new HashMap<>();
+                    params.put("list", listArrStr);
+                    String paramString = createQueryStringForParameters(params);
+
+//                    Log.d("dbg", listArrStr);
+
+                    urlConnection.setFixedLengthStreamingMode(
+                            paramString.getBytes().length);
+
+                    // send the output
+                    OutputStream out = new BufferedOutputStream(urlConnection.getOutputStream());
+
+                    BufferedWriter wr = new BufferedWriter(new OutputStreamWriter(out));
+                    wr.write(paramString);
+                    wr.close();
+
                     InputStream in = new BufferedInputStream(urlConnection.getInputStream());
 
                     // read whole stream
@@ -213,22 +261,46 @@ public class ListActivity extends AppCompatActivity {
             return total.toString();
         }
 
+        // https://ihofmann.wordpress.com/2013/01/23/android-sending-post-requests-with-parameters/
+        private static final char PARAMETER_DELIMITER = '&';
+        private static final char PARAMETER_EQUALS_CHAR = '=';
+        private String createQueryStringForParameters(Map<String, String> parameters) {
+            StringBuilder parametersAsQueryString = new StringBuilder();
+            if (parameters != null) {
+                boolean firstParameter = true;
+
+                for (String parameterName : parameters.keySet()) {
+                    if (!firstParameter) {
+                        parametersAsQueryString.append(PARAMETER_DELIMITER);
+                    }
+
+                    parametersAsQueryString.append(parameterName)
+                            .append(PARAMETER_EQUALS_CHAR)
+                            .append(URLEncoder.encode(
+                                    parameters.get(parameterName)));
+
+                    firstParameter = false;
+                }
+            }
+
+            return parametersAsQueryString.toString();
+        }
+
         protected void onProgressUpdate(Integer... progress) {
 //            setProgressPercent(progress[0]);
         }
 
         protected void onPostExecute(String result) {
-//            showDialog("Downloaded " + result + " bytes");
-//            Toast.makeText(ListActivity.this, result, Toast.LENGTH_LONG);
-            addItem(result);
+            // do nothing?
         }
     }
 
 
-    private class ReadListFromServerTask extends AsyncTask<URL, Long, String> {
+    private class ReadListFromServerTask extends AsyncTask<URL, Long, ArrayList<String>> {
+        private IOException ioException = null;
 
-        protected String doInBackground(URL... urls) {
-            StringBuilder total = new StringBuilder();
+        protected ArrayList<String> doInBackground(URL... urls) {
+            ArrayList<String> list = new ArrayList<>();
 
             int count = urls.length;
             long totalSize = 0;
@@ -242,30 +314,38 @@ public class ListActivity extends AppCompatActivity {
                     String line;
 
                     while ((line = r.readLine()) != null) {
-                        total.append(line);
+                        list.add(line);
                     }
 
                     urlConnection.disconnect();
 
                 } catch (IOException ioe) {
-                    Log.e("saveListToServer", ioe.toString());
+                    Log.e("readListFromServer", ioe.toString());
+                    ioException = ioe;
                 }
 
                 // Escape early if cancel() is called
                 if (isCancelled()) break;
             }
 
-            return total.toString();
+            return list;
         }
 
         protected void onProgressUpdate(Integer... progress) {
 //            setProgressPercent(progress[0]);
         }
 
-        protected void onPostExecute(String result) {
-//            showDialog("Downloaded " + result + " bytes");
-//            Toast.makeText(ListActivity.this, result, Toast.LENGTH_LONG);
-            addItem(result);
+        protected void onPostExecute(ArrayList<String> result) {
+
+            // if list was downloaded successfully
+            if (ioException == null) {
+                listArr = result;
+            } else {
+                readListFromFile();
+            }
+
+            initListAdapter();
+
         }
     }
 

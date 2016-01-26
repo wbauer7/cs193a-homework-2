@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">ToDo</string>
+
+    <string-array name="list_default">
+        <item>List is loading...</item>
+    </string-array>
 </resources>
