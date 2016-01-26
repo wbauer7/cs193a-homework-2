@@ -19,17 +19,10 @@ public class ListActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_list);
 
-        // initialize the list (internally and in the GUI)
-        listArr = new ArrayList<>();
-        listAdapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_list_item_1,
-                listArr);
-
-        ListView listView = (ListView) findViewById(R.id.listView);
-        listView.setAdapter(listAdapter);
+        initList();
 
         // add a longClick listener to remove items
+        ListView listView = (ListView) findViewById(R.id.listView);
         listView.setOnItemLongClickListener(
                 new AdapterView.OnItemLongClickListener() {
                     @Override
@@ -43,10 +36,37 @@ public class ListActivity extends AppCompatActivity {
 
     }
 
+    // initializes the list (internally and in GUI)
+    private void initList() {
+
+        if (listArr == null) {
+            listArr = new ArrayList<>();
+        }
+
+        listAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_list_item_1,
+                listArr);
+
+        ListView listView = (ListView) findViewById(R.id.listView);
+        listView.setAdapter(listAdapter);
+    }
+
     public void addItem(View view) {
         EditText addEditText = (EditText) findViewById(R.id.addEditText);
         listArr.add(addEditText.getText().toString());
         addEditText.setText("");
         listAdapter.notifyDataSetChanged();
+    }
+
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putStringArrayList("listArr", listArr);
+    }
+
+    public void onRestoreInstanceState(Bundle inState) {
+        super.onRestoreInstanceState(inState);
+        listArr = inState.getStringArrayList("listArr");
+        initList();
     }
 }
