@@ -1,5 +1,6 @@
 package com.williambauer.cs193a.todo;
 
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -8,14 +9,23 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.Toast;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Scanner;
 
 public class ListActivity extends AppCompatActivity {
     private static final String LIST_FILENAME = "listFile.txt";
+    private static final String SAVE_URL = "http://cs193a.williambauer.com/todo/save.php";
+    private static final String LOAD_URL = "http://cs193a.williambauer.com/todo/load.php";
 
     ArrayList<String> listArr;
     ArrayAdapter<String> listAdapter;
@@ -37,6 +47,14 @@ public class ListActivity extends AppCompatActivity {
                     }
                 }
         );
+
+        // ******
+        try {
+            URL url = new URL(LOAD_URL);
+            new ReadListFromServerTask().execute(url);
+        } catch (IOException ioe) {
+            Log.e("SaveListToServerCall", ioe.toString());
+        }
 
     }
 
@@ -71,8 +89,12 @@ public class ListActivity extends AppCompatActivity {
 
     public void addItem(View view) {
         EditText addEditText = (EditText) findViewById(R.id.addEditText);
-        listArr.add(addEditText.getText().toString());
+        addItem(addEditText.getText().toString());
         addEditText.setText("");
+    }
+
+    private void addItem(String text) {
+        listArr.add(text);
         listAdapter.notifyDataSetChanged();
     }
 
@@ -122,6 +144,30 @@ public class ListActivity extends AppCompatActivity {
 
     }
 
+    // saves the contents of the list to a web server
+    // http://developer.android.com/reference/java/net/HttpURLConnection.html
+//    private void saveListToServer() {
+
+
+
+//        HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+//        try {
+//            urlConnection.setDoOutput(true);
+//            urlConnection.setChunkedStreamingMode(0);
+//
+//            OutputStream out = new BufferedOutputStream(urlConnection.getOutputStream());
+//            writeStream(out);
+//
+//            InputStream in = new BufferedInputStream(urlConnection.getInputStream());
+//            readStream(in);
+//            finally {
+//                urlConnection.disconnect();
+//            }
+//        }
+
+
+//    }
+
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putStringArrayList("listArr", listArr);
@@ -133,4 +179,95 @@ public class ListActivity extends AppCompatActivity {
         initList();
     }
 
+
+    private class SaveListToServerTask extends AsyncTask<URL, Long, String> {
+
+        protected String doInBackground(URL... urls) {
+            StringBuilder total = new StringBuilder();
+
+            int count = urls.length;
+            long totalSize = 0;
+            for (URL url : urls) {
+                try {
+                    HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+                    InputStream in = new BufferedInputStream(urlConnection.getInputStream());
+
+                    // read whole stream
+                    BufferedReader r = new BufferedReader(new InputStreamReader(in));
+                    String line;
+
+                    while ((line = r.readLine()) != null) {
+                        total.append(line);
+                    }
+
+                    urlConnection.disconnect();
+
+                } catch (IOException ioe) {
+                    Log.e("saveListToServer", ioe.toString());
+                }
+
+                // Escape early if cancel() is called
+                if (isCancelled()) break;
+            }
+
+            return total.toString();
+        }
+
+        protected void onProgressUpdate(Integer... progress) {
+//            setProgressPercent(progress[0]);
+        }
+
+        protected void onPostExecute(String result) {
+//            showDialog("Downloaded " + result + " bytes");
+//            Toast.makeText(ListActivity.this, result, Toast.LENGTH_LONG);
+            addItem(result);
+        }
+    }
+
+
+    private class ReadListFromServerTask extends AsyncTask<URL, Long, String> {
+
+        protected String doInBackground(URL... urls) {
+            StringBuilder total = new StringBuilder();
+
+            int count = urls.length;
+            long totalSize = 0;
+            for (URL url : urls) {
+                try {
+                    HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+                    InputStream in = new BufferedInputStream(urlConnection.getInputStream());
+
+                    // read whole stream
+                    BufferedReader r = new BufferedReader(new InputStreamReader(in));
+                    String line;
+
+                    while ((line = r.readLine()) != null) {
+                        total.append(line);
+                    }
+
+                    urlConnection.disconnect();
+
+                } catch (IOException ioe) {
+                    Log.e("saveListToServer", ioe.toString());
+                }
+
+                // Escape early if cancel() is called
+                if (isCancelled()) break;
+            }
+
+            return total.toString();
+        }
+
+        protected void onProgressUpdate(Integer... progress) {
+//            setProgressPercent(progress[0]);
+        }
+
+        protected void onPostExecute(String result) {
+//            showDialog("Downloaded " + result + " bytes");
+//            Toast.makeText(ListActivity.this, result, Toast.LENGTH_LONG);
+            addItem(result);
+        }
+    }
+
 }
+
